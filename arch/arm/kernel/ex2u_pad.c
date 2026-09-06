@@ -21,11 +21,20 @@
  *
  * Rather than edit the device's saved U-Boot environment, pad the
  * kernel's own uncompressed size so the relocated DTB lands safely
- * past 0x01233000 instead. This array is deliberately uninitialized
- * (BSS): it costs nothing in the compressed zImage/flash size or
- * decompression time, only enlarges the kernel's memory footprint
- * (_end) by its size, which is exactly the knob that moves the
- * relocated DTB's landing address.
+ * past 0x01233000 instead.
+ *
+ * A first attempt padded via .bss (4 MiB, zero-cost to flash size).
+ * That only shifted the relocated DTB by ~0.68 MiB out of the 4 MiB
+ * added: head.S's relocation-destination math (r9, via
+ * get_inflated_image_size) reflects the *inflated/initialized*
+ * image span, not _end; .bss only feeds into it through a separate,
+ * partial "don't let .bss swallow the DTB" correction
+ * (_kernel_bss_size handling in head.S), not a straight 1:1 term.
+ * So this array is placed in .data instead (forced via an explicit
+ * section, regardless of its content) so it counts fully and
+ * directly toward that inflated size. It is still cheap on flash:
+ * a big same-valued fill compresses to almost nothing under the
+ * XZKERN piggy compression.
  *
  * If this board's real fix (bumping the saved U-Boot bootcmd's
  * ramdisk load address) is ever applied instead, this file can be
@@ -37,17 +46,13 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 
-#define EX2U_BOOT_PAD_SIZE (4 * 1024 * 1024)
+#define EX2U_BOOT_PAD_SIZE (8 * 1024 * 1024)
 
-static volatile u8 ex2u_boot_pad[EX2U_BOOT_PAD_SIZE] __used;
+static u8 ex2u_boot_pad[EX2U_BOOT_PAD_SIZE] __used __section(".data.ex2u_pad");
 
 static int __init ex2u_boot_pad_touch(void)
 {
-	/*
-	 * Volatile + __used + the printed address keep the compiler from
-	 * proving this array dead and eliding it entirely.
-	 */
-	ex2u_boot_pad[0] = 0;
+	/* __used (and the explicit .data section) keep this from being elided. */
 	pr_info("ex2u_pad: %u bytes reserved at %p\n",
 		EX2U_BOOT_PAD_SIZE, ex2u_boot_pad);
 	return 0;
