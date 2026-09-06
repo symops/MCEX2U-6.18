@@ -45,6 +45,7 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
 	armada-385-linksys-shelby.dtb \
 	armada-385-synology-ds116.dtb \
 	armada-385-turris-omnia.dtb \
+	armada-385-wdmc-Ex2-Ultra.dtb \
 	armada-388-clearfog.dtb \
 	armada-388-clearfog-base.dtb \
 	armada-388-clearfog-pro.dtb \
