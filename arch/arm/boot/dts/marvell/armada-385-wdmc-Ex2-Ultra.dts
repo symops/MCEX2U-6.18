@@ -26,7 +26,6 @@
 
 	chosen {
 		stdout-path = "console=ttyS0,115200 root=LABEL=rootfs earlyprintk";
-		bootargs = "memblock=debug";
 	};
 
 	memory {
