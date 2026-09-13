@@ -65,25 +65,6 @@
 				status = "okay";
 			};
 
-			poweroff@12100 {
-				compatible = "uart-poweroff";
-				reg = <0x12100 0x100>;
-				clocks = <&coreclk 0>;
-				baud = <19200>;
-				cmd = [fa 03 03 01 00 00 fb];
-				status = "okay";
-			};
-
-			restart@12100 {
-				compatible = "uart-restart";
-				reg = <0x12100 0x100>;
-				clocks = <&coreclk 0>;
-				baud = <19200>;
-				cmd = [fa 03 03 02 00 00 fb];
-				override;
-				status = "okay";
-			};
-			
 			pinctrl: pinctrl@18000 {
 				xhci0_vbus_pins: xhci0-vbus-pins {
 					marvell,pins = "mpp26";
