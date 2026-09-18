@@ -28,6 +28,17 @@ obj-$(CONFIG_AHCI_TEGRA)	+= ahci_tegra.o libahci.o libahci_platform.o
 obj-$(CONFIG_AHCI_XGENE)	+= ahci_xgene.o libahci.o libahci_platform.o
 obj-$(CONFIG_AHCI_QORIQ)	+= ahci_qoriq.o libahci.o libahci_platform.o
 
+# WD My Cloud EX2 Ultra (armada-385-wdmc-Ex2-Ultra): this board's rescue
+# userspace insmod's ahci_mvebu.ko and libahci_platform.ko itself (both
+# must stay separate loadable modules), but libahci.ko is not in its
+# insmod list and has no Kconfig prompt of its own to force independently
+# -- it just follows whichever AHCI_* driver pulled it in. Build only
+# libahci.o into vmlinux so both of those modules resolve ahci_ops/etc.
+# without libahci.ko needing to be loaded first.
+ifeq ($(CONFIG_AHCI_MVEBU),m)
+obj-y				+= libahci.o
+endif
+
 # SFF w/ custom DMA
 obj-$(CONFIG_PDC_ADMA)		+= pdc_adma.o
 obj-$(CONFIG_PATA_ARASAN_CF)	+= pata_arasan_cf.o
