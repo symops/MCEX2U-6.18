@@ -282,6 +282,30 @@
 		};
 	};
 
+	/*
+	 * Cosmetic power-off -- see drivers/power/reset/wdmc-ex2u-poweroff.c
+	 * for the full story on why this isn't a real power cut. reg[0]/
+	 * reg[1] are gpio0's and gpio1's own DATA_OUT registers (a second,
+	 * non-exclusive mapping of the exact same physical registers
+	 * gpio-mvebu.c already owns -- the LED and VBUS lines below are
+	 * already exclusively claimed by leds-gpio/regulator-fixed, so a
+	 * second gpiod_get would just fail).
+	 *
+	 * gpio0 bits 26/27: usb3-vbus0/usb3-vbus1 (see reg_usb3_0_vbus/
+	 * reg_usb3_1_vbus below). gpio1 bits 11/20/21/22: the four SATA
+	 * bay LEDs (see gpio-leds above). The two reg_sata0/reg_sata1 12V
+	 * drive-power lines are deliberately left alone -- cutting drive
+	 * power is a real action, not a cosmetic one.
+	 */
+	poweroff: poweroff@f1018100 {
+		compatible = "wd,ex2u-poweroff";
+		reg = <0xf1018100 0x40>, <0xf1018140 0x40>;
+		reg-names = "gpio0", "gpio1";
+		wd,gpio0-off-bits = <26 27>;
+		wd,gpio1-off-bits = <11 20 21 22>;
+		status = "okay";
+	};
+
 	usb3_0_phy: usb3_0_phy {
 		compatible = "usb-nop-xceiv";
 		vcc-supply = <&reg_usb3_0_vbus>;
