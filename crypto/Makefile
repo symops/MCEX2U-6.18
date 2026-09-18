@@ -200,6 +200,16 @@ obj-$(CONFIG_CRYPTO_ECRDSA) += ecrdsa_generic.o
 #
 obj-$(CONFIG_XOR_BLOCKS) += xor.o
 obj-$(CONFIG_ASYNC_CORE) += async_tx/
+
+# WD My Cloud EX2 Ultra: raid456.ko must stay a module, but its XOR_BLOCKS
+# support (xor.o) has no Kconfig prompt of its own and would otherwise load
+# only as xor.ko, which is not in the board's fixed insmod list. Also force
+# descent into async_tx/ during the vmlinux phase itself (CONFIG_ASYNC_CORE=m
+# alone would skip it there), so that Makefile's own obj-y override takes
+# effect.
+ifeq ($(CONFIG_MD_RAID456),m)
+obj-y += xor.o async_tx/
+endif
 obj-$(CONFIG_ASYMMETRIC_KEY_TYPE) += asymmetric_keys/
 crypto_simd-y := simd.o
 obj-$(CONFIG_CRYPTO_SIMD) += crypto_simd.o

@@ -166,6 +166,14 @@ obj-$(CONFIG_ZSTD_DECOMPRESS) += zstd/
 obj-$(CONFIG_XZ_DEC) += xz/
 obj-$(CONFIG_RAID6_PQ) += raid6/
 
+# WD My Cloud EX2 Ultra: force descent into lib/raid6/ during the vmlinux
+# (obj-y) build phase too, since CONFIG_RAID6_PQ=m alone would skip it there
+# -- needed so lib/raid6/Makefile's own obj-y override for raid6_pq.o takes
+# effect (raid456.ko must stay a module but not depend on raid6_pq.ko).
+ifeq ($(CONFIG_MD_RAID456),m)
+obj-y += raid6/
+endif
+
 lib-$(CONFIG_DECOMPRESS_GZIP) += decompress_inflate.o
 lib-$(CONFIG_DECOMPRESS_BZIP2) += decompress_bunzip2.o
 lib-$(CONFIG_DECOMPRESS_LZMA) += decompress_unlzma.o

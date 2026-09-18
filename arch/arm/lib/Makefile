@@ -42,6 +42,13 @@ $(obj)/csumpartialcopyuser.o:	$(obj)/csumpartialcopygeneric.S
 ifeq ($(CONFIG_KERNEL_MODE_NEON),y)
   CFLAGS_xor-neon.o		+= $(CC_FLAGS_FPU)
   obj-$(CONFIG_XOR_BLOCKS)	+= xor-neon.o
+
+  # WD My Cloud EX2 Ultra: crypto/xor.o is forced built-in (see crypto/Makefile)
+  # when raid456.ko must stay a module, so its NEON helper must be built-in too
+  # or vmlinux fails to link against xor_block_neon_inner.
+  ifeq ($(CONFIG_MD_RAID456),m)
+    obj-y += xor-neon.o
+  endif
 endif
 
 obj-$(CONFIG_FUNCTION_ERROR_INJECTION) += error-inject.o

@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0
 obj-$(CONFIG_RAID6_PQ)	+= raid6_pq.o
 
+# WD My Cloud EX2 Ultra: raid456.ko must stay a module, but raid6_pq has no
+# Kconfig prompt of its own and would otherwise only load as raid6_pq.ko,
+# which is not in the board's fixed insmod list.
+ifeq ($(CONFIG_MD_RAID456),m)
+obj-y += raid6_pq.o
+endif
+
 raid6_pq-y	+= algos.o recov.o tables.o int1.o int2.o int4.o \
 		   int8.o
 
