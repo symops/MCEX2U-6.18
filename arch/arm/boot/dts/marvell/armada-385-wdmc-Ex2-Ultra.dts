@@ -264,8 +264,18 @@
 		#size-cells = <0>;
 
 		reset {
+			/*
+			 * KEY_RESTART is treated as a genuine reboot request by
+			 * systemd-logind -- confirmed on real hardware, a single
+			 * press rebooted the board with nothing of ours asking
+			 * it to (same root cause hit and fixed the same way on
+			 * the MCG1 port, commit f203b6d). KEY_PROG1 is inert to
+			 * any such policy while still being a normal,
+			 * distinguishable evdev keycode; a real hold-to-reset
+			 * policy can remap this once one exists.
+			 */
 			label = "reset";
-			linux,code = <KEY_RESTART>;  // Restart=0x198, Power=0x116
+			linux,code = <KEY_PROG1>;
 			gpios = <&gpio1 18 GPIO_ACTIVE_LOW>;
 			debounce-interval = <60>;
 			wakeup-source;
