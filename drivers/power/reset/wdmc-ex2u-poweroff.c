@@ -4,21 +4,34 @@
  * (Marvell Armada 385).
  *
  * Neither mainline nor the vendor 6.6.129 GPL source implements a real
- * hardware power-off for this board: the vendor's own DTS carried a
- * "uart-poweroff" node, but that compatible string matches no driver
- * anywhere, mainline or vendor -- it was dropped rather than ported
- * (see git history, "drop uart-poweroff/restart nodes"). No board-level
- * 12V power-hold GPIO was found either. `halt`/`poweroff` on this
- * hardware therefore just park the CPU with the board still fully
- * powered: SATA bay LEDs lit, USB3 VBUS live.
+ * hardware power-off reachable from a plain GPIO or SoC register: the
+ * vendor's own DTS carried a "uart-poweroff" node, but that compatible
+ * string matches no driver anywhere, mainline or vendor -- it was
+ * dropped rather than ported (see git history, "drop uart-poweroff/
+ * restart nodes"). No board-level 12V power-hold GPIO was found either.
+ * `halt`/`poweroff` on this hardware therefore just park the CPU with
+ * the board still fully powered: SATA bay LEDs lit, USB3 VBUS live.
  *
- * This driver does not attempt to cut real board power -- there is
- * currently no known way to do that from software on this hardware.
- * The two explicit reg_sata0/reg_sata1 12V drive-power regulators are
- * deliberately left alone: cutting drive power is a real, consequential
- * action, not a cosmetic one, and hasn't been asked for. This driver
- * only quiets the two things under this SoC's own direct GPIO control
- * that otherwise stay conspicuously live:
+ * A real power-off likely *does* exist, just not through this driver: the
+ * board's userspace has an `mcu_ctl` binary that talks to the Welltrend
+ * 6703F-OG240WT MCU on uart1 (see that node's own comment) and exposes a
+ * `sys_shutdown` command, plus `fan_set_0`/`led_set_off` for the fan and
+ * the separate front power LED this driver has no access to at all. That
+ * MCU protocol isn't implemented in-kernel anywhere (it's presumably what
+ * the dropped "uart-poweroff" node was for) -- the real fix belongs in a
+ * userspace shutdown hook (e.g. a systemd unit running `mcu_ctl
+ * sys_shutdown` before `shutdown.target`), not here, since `mcu_ctl` is a
+ * userspace binary this kernel-side handler cannot invoke once userspace
+ * is already torn down.
+ *
+ * This driver does not attempt to cut real board power itself -- there is
+ * no known way to do that from a plain GPIO/register poke on this
+ * hardware (as opposed to the MCU protocol above). The two explicit
+ * reg_sata0/reg_sata1 12V drive-power regulators are deliberately left
+ * alone: cutting drive power is a real, consequential action, not a
+ * cosmetic one, and hasn't been asked for. This driver only quiets the
+ * two things under this SoC's own direct GPIO control that otherwise
+ * stay conspicuously live:
  *
  *  - The four SATA bay LEDs (sata1/sata2 red+blue -- gpio1 bits
  *    11/20/21/22 in the board DTS): already exclusively owned by

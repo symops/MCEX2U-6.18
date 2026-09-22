@@ -58,8 +58,19 @@
 				status = "okay";
 			};
 
-			/* Connected to Welltrend 6703F-OG240WT MCU
-			 * which controls power, fan and other things
+			/*
+			 * Connected to Welltrend 6703F-OG240WT MCU which
+			 * controls power, fan and the front power LED.
+			 * Confirmed on real hardware: userspace already has
+			 * an `mcu_ctl` binary that talks to it, with commands
+			 * including sys_shutdown/sys_reboot, fan_set_{0,25,
+			 * 50,75,100}, led_set_on/led_set_off/led_blink/
+			 * led_breath, and tmp_get_f/tmp_get_c. No in-kernel
+			 * driver for this protocol exists (see
+			 * drivers/power/reset/wdmc-ex2u-poweroff.c's own
+			 * comment) -- `sys_shutdown` may be this board's only
+			 * real power-cut mechanism, but that's for a
+			 * userspace shutdown hook to use, not the kernel.
 			 */
 			uart1: serial@12100 {
 				status = "okay";
@@ -294,7 +305,9 @@
 
 	/*
 	 * Cosmetic power-off -- see drivers/power/reset/wdmc-ex2u-poweroff.c
-	 * for the full story on why this isn't a real power cut. reg[0]/
+	 * for the full story, including why a real power cut likely exists
+	 * via the uart1 MCU's `mcu_ctl sys_shutdown` userspace command
+	 * instead of anything this GPIO-only driver can reach. reg[0]/
 	 * reg[1] are gpio0's and gpio1's own DATA_OUT registers (a second,
 	 * non-exclusive mapping of the exact same physical registers
 	 * gpio-mvebu.c already owns -- the LED and VBUS lines below are
