@@ -346,13 +346,14 @@ config POWER_MLXBF
 	  This driver supports reset or low power mode handling for Mellanox BlueField.
 
 config POWER_RESET_WDMC_EX2U
-	tristate "WD My Cloud Expert Series EX2 Ultra cosmetic power-off driver"
+	tristate "WD My Cloud Expert Series EX2 Ultra power-off driver"
 	depends on ARCH_MVEBU || COMPILE_TEST
 	help
-	  This driver does not cut real board power (no such mechanism is
-	  known to exist on this hardware, in either mainline or the vendor
-	  GPL source). It quiets the SATA bay LEDs and USB3 VBUS on the WD
-	  My Cloud Expert Series EX2 Ultra when the system powers off,
+	  This driver sends the WD My Cloud Expert Series EX2 Ultra's
+	  Welltrend MCU (attached via uart1) its real sys_shutdown command,
+	  reimplementing the vendor userspace mcu_ctl tool's wire protocol
+	  in-kernel. It also quiets the SATA bay LEDs and USB3 VBUS as a
+	  fallback in case the MCU shutdown doesn't actually cut power,
 	  since those otherwise stay fully live after halt/poweroff on
 	  this board.
 

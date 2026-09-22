@@ -304,15 +304,20 @@
 	};
 
 	/*
-	 * Cosmetic power-off -- see drivers/power/reset/wdmc-ex2u-poweroff.c
-	 * for the full story, including why a real power cut likely exists
-	 * via the uart1 MCU's `mcu_ctl sys_shutdown` userspace command
-	 * instead of anything this GPIO-only driver can reach. reg[0]/
-	 * reg[1] are gpio0's and gpio1's own DATA_OUT registers (a second,
-	 * non-exclusive mapping of the exact same physical registers
-	 * gpio-mvebu.c already owns -- the LED and VBUS lines below are
+	 * Power-off -- see drivers/power/reset/wdmc-ex2u-poweroff.c for the
+	 * full story. reg[2] is uart1's own registers (a second,
+	 * non-exclusive mapping of the same physical UART serial8250
+	 * already owns): this driver sends the uart1 MCU a real
+	 * `sys_shutdown` command, reimplementing userspace mcu_ctl's wire
+	 * protocol in-kernel -- confirmed on real hardware to be a genuine
+	 * power cut, not cosmetic.
+	 *
+	 * reg[0]/reg[1] are gpio0's and gpio1's own DATA_OUT registers
+	 * (same non-exclusive-mapping trick, since gpio-mvebu.c owns
+	 * those), used only as a fallback in case the MCU shutdown above
+	 * doesn't actually cut power -- the LED and VBUS lines below are
 	 * already exclusively claimed by leds-gpio/regulator-fixed, so a
-	 * second gpiod_get would just fail).
+	 * second gpiod_get would just fail.
 	 *
 	 * gpio0 bits 26/27: usb3-vbus0/usb3-vbus1, active-high (see
 	 * reg_usb3_0_vbus/reg_usb3_1_vbus below) -- cleared to turn off,
@@ -325,13 +330,14 @@
 	 * not clearing (see the blue LED nodes' own comment above).
 	 *
 	 * The two reg_sata0/reg_sata1 12V drive-power lines are
-	 * deliberately left alone -- cutting drive power is a real
-	 * action, not a cosmetic one.
+	 * deliberately left alone -- cutting drive power directly (as
+	 * opposed to via the MCU's own real shutdown) is a real action,
+	 * not a cosmetic one.
 	 */
 	poweroff: poweroff@f1018100 {
 		compatible = "wd,ex2u-poweroff";
-		reg = <0xf1018100 0x40>, <0xf1018140 0x40>;
-		reg-names = "gpio0", "gpio1";
+		reg = <0xf1018100 0x40>, <0xf1018140 0x40>, <0xf1012100 0x100>;
+		reg-names = "gpio0", "gpio1", "uart1";
 		wd,gpio0-clear-bits = <26 27>;
 		wd,gpio1-clear-bits = <11 20>;
 		wd,gpio1-set-bits = <21 22>;
