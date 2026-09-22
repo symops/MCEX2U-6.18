@@ -105,7 +105,22 @@ static void wdmc_ex2u_poweroff_handler(void)
 		pr_emerg("wdmc-ex2u-poweroff: usb3 vbus off\n");
 	}
 
-	pr_emerg("wdmc-ex2u-poweroff: handler done\n");
+	pr_emerg("wdmc-ex2u-poweroff: handler done, halting\n");
+
+	/*
+	 * This board has no real power-cut mechanism, so machine_power_off()
+	 * (arch/arm/kernel/reboot.c) falls straight through after this
+	 * handler returns instead of looping forever the way machine_halt()
+	 * does -- confirmed on real hardware: the system kept running for
+	 * 10+ more seconds (CPU0 alive, CPU1 parked by the earlier
+	 * smp_send_stop()), tripping an RCU stall warning, and something
+	 * still running during that window (a disk-activity LED trigger,
+	 * most likely) re-lit the SATA bay LEDs we'd just turned off above.
+	 * Halt for real here so the off state we just set actually sticks.
+	 */
+	local_irq_disable();
+	while (1)
+		cpu_relax();
 }
 
 static int wdmc_ex2u_read_bits(struct device *dev, const char *prop,
