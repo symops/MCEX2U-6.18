@@ -27,7 +27,10 @@
  *    directly instead, through a second, non-exclusive raw MMIO mapping
  *    of the same gpio1 bank's DATA_OUT register -- safe because this
  *    only ever runs as the very last thing before the CPU parks, with
- *    nothing left to race against.
+ *    nothing left to race against. Confirmed on real hardware that the
+ *    red and blue channels have opposite polarity (red active-high,
+ *    blue active-low), so "off" means clearing bits 11/20 but *setting*
+ *    bits 21/22 -- see wd,gpioN-clear-bits/wd,gpioN-set-bits below.
  *
  *  - USB3 VBUS (both ports -- gpio0 bits 26/27): same story, already
  *    exclusively owned by the two regulator-fixed nodes (both also
@@ -60,27 +63,35 @@
 #define MVEBU_GPIO_OUT_OFF	0x00
 #define WDMC_EX2U_MAX_BITS	8
 
-struct wdmc_ex2u_poweroff_data {
-	void __iomem *gpio0_base;
-	unsigned int gpio0_off_bits[WDMC_EX2U_MAX_BITS];
-	unsigned int n_gpio0_off_bits;
+struct wdmc_ex2u_gpio_bank {
+	void __iomem *base;
+	unsigned int clear_bits[WDMC_EX2U_MAX_BITS];
+	unsigned int n_clear_bits;
+	unsigned int set_bits[WDMC_EX2U_MAX_BITS];
+	unsigned int n_set_bits;
+};
 
-	void __iomem *gpio1_base;
-	unsigned int gpio1_off_bits[WDMC_EX2U_MAX_BITS];
-	unsigned int n_gpio1_off_bits;
+struct wdmc_ex2u_poweroff_data {
+	struct wdmc_ex2u_gpio_bank gpio0;
+	struct wdmc_ex2u_gpio_bank gpio1;
 };
 
 static struct wdmc_ex2u_poweroff_data *wdmc_ex2u_poweroff;
 
-static void wdmc_ex2u_clear_bits(void __iomem *base, const unsigned int *bits, unsigned int n)
+static void wdmc_ex2u_apply_bank(const struct wdmc_ex2u_gpio_bank *bank)
 {
 	u32 val;
 	unsigned int i;
 
-	val = readl(base + MVEBU_GPIO_OUT_OFF);
-	for (i = 0; i < n; i++)
-		val &= ~BIT(bits[i]);
-	writel(val, base + MVEBU_GPIO_OUT_OFF);
+	if (!bank->base)
+		return;
+
+	val = readl(bank->base + MVEBU_GPIO_OUT_OFF);
+	for (i = 0; i < bank->n_clear_bits; i++)
+		val &= ~BIT(bank->clear_bits[i]);
+	for (i = 0; i < bank->n_set_bits; i++)
+		val |= BIT(bank->set_bits[i]);
+	writel(val, bank->base + MVEBU_GPIO_OUT_OFF);
 }
 
 static void wdmc_ex2u_poweroff_handler(void)
@@ -91,19 +102,11 @@ static void wdmc_ex2u_poweroff_handler(void)
 	if (!wdmc_ex2u_poweroff)
 		return;
 
-	if (wdmc_ex2u_poweroff->gpio1_base) {
-		wdmc_ex2u_clear_bits(wdmc_ex2u_poweroff->gpio1_base,
-				      wdmc_ex2u_poweroff->gpio1_off_bits,
-				      wdmc_ex2u_poweroff->n_gpio1_off_bits);
-		pr_emerg("wdmc-ex2u-poweroff: sata bay leds off\n");
-	}
+	wdmc_ex2u_apply_bank(&wdmc_ex2u_poweroff->gpio1);
+	pr_emerg("wdmc-ex2u-poweroff: sata bay leds off\n");
 
-	if (wdmc_ex2u_poweroff->gpio0_base) {
-		wdmc_ex2u_clear_bits(wdmc_ex2u_poweroff->gpio0_base,
-				      wdmc_ex2u_poweroff->gpio0_off_bits,
-				      wdmc_ex2u_poweroff->n_gpio0_off_bits);
-		pr_emerg("wdmc-ex2u-poweroff: usb3 vbus off\n");
-	}
+	wdmc_ex2u_apply_bank(&wdmc_ex2u_poweroff->gpio0);
+	pr_emerg("wdmc-ex2u-poweroff: usb3 vbus off\n");
 
 	pr_emerg("wdmc-ex2u-poweroff: handler done, halting\n");
 
@@ -148,44 +151,57 @@ static int wdmc_ex2u_read_bits(struct device *dev, const char *prop,
 	return 0;
 }
 
+static int wdmc_ex2u_init_bank(struct device *dev, struct platform_device *pdev,
+				 const char *res_name, struct wdmc_ex2u_gpio_bank *bank,
+				 const char *clear_prop, const char *set_prop)
+{
+	struct resource *res;
+	int ret;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, res_name);
+	if (!res)
+		return 0;
+
+	bank->base = devm_ioremap(dev, res->start, resource_size(res));
+	if (!bank->base)
+		return -ENOMEM;
+
+	if (clear_prop) {
+		ret = wdmc_ex2u_read_bits(dev, clear_prop, bank->clear_bits,
+					   WDMC_EX2U_MAX_BITS, &bank->n_clear_bits);
+		if (ret)
+			return dev_err_probe(dev, ret, "bad %s\n", clear_prop);
+	}
+
+	if (set_prop) {
+		ret = wdmc_ex2u_read_bits(dev, set_prop, bank->set_bits,
+					   WDMC_EX2U_MAX_BITS, &bank->n_set_bits);
+		if (ret)
+			return dev_err_probe(dev, ret, "bad %s\n", set_prop);
+	}
+
+	return 0;
+}
+
 static int wdmc_ex2u_poweroff_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct wdmc_ex2u_poweroff_data *data;
-	struct resource *res;
 	int ret;
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpio0");
-	if (res) {
-		data->gpio0_base = devm_ioremap(dev, res->start, resource_size(res));
-		if (!data->gpio0_base)
-			return -ENOMEM;
+	ret = wdmc_ex2u_init_bank(dev, pdev, "gpio0", &data->gpio0,
+				   "wd,gpio0-clear-bits", NULL);
+	if (ret)
+		return ret;
 
-		ret = wdmc_ex2u_read_bits(dev, "wd,gpio0-off-bits",
-					   data->gpio0_off_bits,
-					   WDMC_EX2U_MAX_BITS,
-					   &data->n_gpio0_off_bits);
-		if (ret)
-			return dev_err_probe(dev, ret, "bad wd,gpio0-off-bits\n");
-	}
-
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpio1");
-	if (res) {
-		data->gpio1_base = devm_ioremap(dev, res->start, resource_size(res));
-		if (!data->gpio1_base)
-			return -ENOMEM;
-
-		ret = wdmc_ex2u_read_bits(dev, "wd,gpio1-off-bits",
-					   data->gpio1_off_bits,
-					   WDMC_EX2U_MAX_BITS,
-					   &data->n_gpio1_off_bits);
-		if (ret)
-			return dev_err_probe(dev, ret, "bad wd,gpio1-off-bits\n");
-	}
+	ret = wdmc_ex2u_init_bank(dev, pdev, "gpio1", &data->gpio1,
+				   "wd,gpio1-clear-bits", "wd,gpio1-set-bits");
+	if (ret)
+		return ret;
 
 	if (pm_power_off)
 		return dev_err_probe(dev, -EBUSY, "pm_power_off already claimed\n");
@@ -194,8 +210,8 @@ static int wdmc_ex2u_poweroff_probe(struct platform_device *pdev)
 	pm_power_off = wdmc_ex2u_poweroff_handler;
 	platform_set_drvdata(pdev, data);
 
-	dev_info(dev, "registered as pm_power_off (%u gpio0 bit(s), %u gpio1 bit(s))\n",
-		 data->n_gpio0_off_bits, data->n_gpio1_off_bits);
+	dev_info(dev, "registered as pm_power_off (gpio0: %u clear; gpio1: %u clear, %u set)\n",
+		 data->gpio0.n_clear_bits, data->gpio1.n_clear_bits, data->gpio1.n_set_bits);
 
 	return 0;
 }
